@@ -519,7 +519,12 @@ def _preflight(target_descriptor: int) -> None:
 def _filesystem_supported(descriptor: int) -> bool:
     try:
         libc = ctypes.CDLL(None, use_errno=True)
-        function = libc.fstatfs
+        # On x86_64 macOS the plain `fstatfs` symbol fills the legacy 32-bit-inode
+        # layout; `_DarwinStatFs` is the 64-bit layout, exported as `fstatfs$INODE64`
+        # there and as plain `fstatfs` on arm64, where no legacy variant exists.
+        function = getattr(libc, "fstatfs$INODE64", None) if sys.platform == "darwin" else None
+        if function is None:
+            function = libc.fstatfs
     except (AttributeError, OSError):
         return False
     if sys.platform == "linux":
